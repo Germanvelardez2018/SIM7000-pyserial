@@ -93,7 +93,7 @@ class SerialInterface:
         self.send_cmd( CMD_SMS_SET_FUNCTION,"OK",info_debug= info_debug)
         time.sleep(1)
         #Set the number to send the message
-        cmd = "AT+CMGS= \"" + str(number) + "\"" 
+        cmd =CMD_SEND_MSM.format(str(number)) 
         self.timeout = 5
         self.send_cmd(cmd,"> ",4,info_debug= info_debug)
 

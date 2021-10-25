@@ -37,7 +37,7 @@ def main():
                 print("wait for the SIM7000G")
                 res = S_Interface.send_cmd("AT","OK")
         print("SIM7000G ready")
-        S_Interface.send_message(3856870066,"Posicionx =134 Posiciony = 222 ")
+        S_Interface.send_message(3856870066,"hola mundo")
         time.sleep(1)
       
 if __name__ == "__main__":
