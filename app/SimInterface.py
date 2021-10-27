@@ -28,7 +28,9 @@ BAUDRATE_LIST = [9600,19200,38400,57600,115200] #Valid Baudrate
 
 MIN_SIGNAL_LEVEL = 15.0
 
+MAX_SIGNAL_LEVEL = 40.0
 
+TRY_DELAY   =       5
 
 
 class SimInterface:
@@ -36,28 +38,37 @@ class SimInterface:
     END_CMD="\r\n" # It is necessary that the sim7000 can understand the command
     LOG_FILE_PATH = "log_file.txt" # Path to the log file
     LOG_FILE = None
+    _DEBUG_PRINT_ = True
+    OBJNAME = "SIM_INTERFACE"
 
-    def __init__(self,name_device="SIM DEVICE",baudrate=115200,debug_out=True):
+    def __init__(self,baudrate=115200,debug_out=True):
         
         self.debug_out = debug_out
-        self.name_device = name_device
+
         self.port = self._init_port()
-        print("port init {}".format(self.port))
+        
         self.set_baudrate(baudrate)
         self.LOG_FILE = LogFile(self.LOG_FILE_PATH)
         
+
+    def set_debug_print(self,value):
+        self._DEBUG_PRINT_ = bool(value)
+
     def debug_print(self,message,output= True):
-        if self.debug_out == True:
-            now = datetime.now()
-            if output == True:
+        now = datetime.now()
+        if output == True:
                 flow = "=>"
                 space = ""
-            else:
+        else:
                 flow = "<="
                 space= "     "
-            out = "[{}]{} {}:{}:{} {} {}".format(self.name_device,space,now.hour,now.minute,now.second,flow,message)
+
+        out = "[{}]{} {}:{}:{} {} {}".format(self.OBJNAME,space,now.hour,now.minute,now.second,flow,message)
+        
+        if self._DEBUG_PRINT_ == True:
             print(out)
-            self.LOG_FILE.write_file(out+  "\n")
+
+        self.LOG_FILE.write_file(out+  "\n")
     
     
     def _clear_log_file(self):
@@ -133,13 +144,27 @@ class SimInterface:
                         self.baudrate = baud
         print("the baudrate is {}".format(self.baudrate))
 
+    def _send_cmd_with_checklist(self,cmd, list_check,timeout=1):
 
-    def _send_cmd__set(self,cmd,timeout=1):
+        res = True
+        buffer_rx = self._get_buffer_rx(cmd,timeout) # get buffer rx
+       
+        for check in list_check:
+            if str(buffer_rx).count(check) == 0: #check not finded
+                res= False
+                break
+       
+        return res
+
+
+
+    def _get_buffer_rx(self,cmd,timeout=1):
         
         cmd = cmd + self.END_CMD
-        buf_rx = ""
+        buf_rx =""
         try:
             with serial.Serial(self.port,self.baudrate,timeout= timeout) as s:
+                s.flushInput()
              
                 out = bytes((cmd),"utf-8")
                 w= s.write(out)
@@ -148,13 +173,12 @@ class SimInterface:
                 for line in lines:
                     buf_rx = buf_rx + str(line)
                     line_formated = (str(line)).replace("b","" )
-                    print(line)
                     self.debug_print(line_formated,False)
                          
         except SerialException:
-            print("ocurrio un error ")
+            self.debug_print("ocurrio un error ")
         except SerialTimeoutException:
-            print(f"el comando no obtuvo respuesta")
+            self.debug_print(f"el comando no obtuvo respuesta")
         
         return buf_rx
        
@@ -175,6 +199,7 @@ class SimInterface:
         res = False
         try:
             with serial.Serial(self.port,self.baudrate,timeout= timeout) as s:
+                s.flushInput()
                 if encoding == True:
                     out = bytes((cmd),"utf-8")
                 else:
@@ -186,15 +211,15 @@ class SimInterface:
                 lines=s.readlines()
                 for line in lines:
                     line_formated = (str(line)).replace("b","" )
-                    print(line)
+                   
                     self.debug_print(line_formated,False)
                     if (str(line).count("OK")) > 0:
                         res = True
-                        print("Se recibio respuesta esperada: "+answer)         
+                              
         except SerialException:
-            print("ocurrio un error ")
+            self.debug_print("ocurrio un error ")
         except SerialTimeoutException:
-            print(f"el comando no obtuvo respuesta")
+            self.debug_print(f"el comando no obtuvo respuesta")
 
         return res
         
@@ -218,11 +243,34 @@ class SimInterface:
         self._send_cmd_raw(buff_hex,"OK",20,encoding=False)
        
 
+
+    def is_dead_signal(self):
+        """"
+        Return celphone operator
+        """
+      
+        #DO CHECK
+        return self._send_cmd_with_checklist(CMD_GET_OPERATOR,["OK","+COPS: 0"]) # if true, dead signal
+        
+        
+
+   
+
+
     def get_signal(self):
         """
         Return signal level (float).
         """
-        values = self._send_cmd__set(cmd=CMD_GET_SIGNAL_LEVEN,timeout=1)
+
+        #first get operator 
+        cellphone_operator = self.is_dead_signal()
+
+        #self.debug_print("signal dead : {}".format(cellphone_operator))
+        if cellphone_operator == True :
+            self.debug_print("NOT CELLPHONE OPERATOR")
+            return 0
+
+        values = self._get_buffer_rx(cmd=CMD_GET_SIGNAL_LEVEN,timeout=1)
         signal = 0
      
         pos = values.find(":")
@@ -235,20 +283,36 @@ class SimInterface:
                 signal = n
               
             except Exception:
-                print("error signal value")
+                self.debug_print("error signal value")
             
         return signal
 
 
+    def internet_secuence(self):
+        cmd_list = [
+            "AT+CNMP=38",
+            "AT+CMNB=2",
+            "AT+CGATT=1",
+            'AT+CSTT="datos.personal.com","datos","datos"',
+            "AT+CIICR",
+            "AT+CIFSR"
 
+        ]
+
+        for cmd in cmd_list:
+            print("send cmd {}".format(cmd))
+            self._send_cmd(cmd,"OK",5)
+            time.sleep(2)
 
 
 
 if __name__ == "__main__":
-    app = SimInterface("sim7000g")
+    app = SimInterface()
     time.sleep(2)
 
     app._clear_log_file()
+    
+    #app.set_debug_print(False)
 
     res = app._send_cmd("AT","OK",1)
     while res == False:
@@ -257,11 +321,15 @@ if __name__ == "__main__":
         res = app._send_cmd("AT","OK",1) 
 
 
-    print("try to send a text message to a cellphone")
+    
     signal_value =app.get_signal()
-    if signal_value <MIN_SIGNAL_LEVEL:
-        print("low signal") 
-    #app.send_message(3856870066,"mensaje de pruebas del sistema")
-    #app.send_message(3856870066,"Error en GPS")
-    #app.send_message(3856870066,"simo INTI v1")
+    while (signal_value <MIN_SIGNAL_LEVEL or signal_value > MAX_SIGNAL_LEVEL) == True:
+        print("\t\tNot signal") 
+        signal_value =app.get_signal()
+        time.sleep(TRY_DELAY)
+    app.set_debug_print(True)    
+    print("try to send a text message to a cellphone")
+    app.send_message(3856870066,"sistemas")
+    app.send_message(3856870066,"informes")
+    app.send_message(3856870066,"componentes")
 

@@ -15,6 +15,7 @@ Date:{}
 
 class LogFile:
     File= None
+    OBJNAME ="LOGFILE"
     def __init__(self,name,header=HEADER_LOG):
         self.name = name
         self.header = header
@@ -38,30 +39,30 @@ class LogFile:
             with open(self.name,mode="a",encoding="utf-8") as file:
                 file.write(text)
         except Exception:
-            print("WriteError ")
+            print("[{}]WriteError".format(self.OBJNAME))
 
 
     def read_all(self):
         try:
             with open(self.name,encoding="utf-8") as f:
-                print("Read all:")
+                print("[{}]Read all: ".format(self.OBJNAME))
                 lines=f.readlines()
                 for line in lines:
                     print(str(line))
         except IOError:
-            print("Error File")
+            print("[{}]Error File ".format(self.OBJNAME))
         except Exception:
-            print("Error")
+            print("[{}]Error".format(self.OBJNAME))
 
 
 
     def clear_all(self):
-        print("clear the file")
+        print("[{}]clear the file ".format(self.OBJNAME))
         try:
             os.remove(self.name)
             self._init_file()
         except IOError:
-            print("Error to clear the file")
+            print("[{}]Error to clear the file".format(self.OBJNAME))
         #create a new one
         #create the file
 
