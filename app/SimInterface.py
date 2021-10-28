@@ -8,7 +8,8 @@
 
 """
 
-from posix import POSIX_FADV_NOREUSE
+
+from abc import abstractclassmethod
 from LogFile import LogFile
 from Sim7000G import *
 
@@ -185,7 +186,7 @@ class SimInterface:
 
     #Serial functions
 
-    def _send_cmd(self,cmd,answer,timeout=1):
+    def _send_cmd(self,cmd,answer="OK",timeout=1):
         """
         Send a commands and wit a response
         """
@@ -225,6 +226,12 @@ class SimInterface:
         
     #TOP LEVEL FUNCTIONS
 
+    def set_long_error_message(self,value):
+
+        self._send_cmd("AT+CMEE={}".format(str(value)),"OK")
+        
+        
+
     def send_message(self,phone,message):
         #Activate the message function
         #Activate the msm function
@@ -250,9 +257,9 @@ class SimInterface:
         """
       
         #DO CHECK
-        return self._send_cmd_with_checklist(CMD_GET_OPERATOR,["OK","+COPS: 0"]) # if true, dead signal
+        res = self._send_cmd_with_checklist(CMD_GET_OPERATOR,["OK","+COPS: 0"]) # if true, dead signal
         
-        
+        return res
 
    
 
@@ -266,9 +273,11 @@ class SimInterface:
         cellphone_operator = self.is_dead_signal()
 
         #self.debug_print("signal dead : {}".format(cellphone_operator))
-        if cellphone_operator == True :
+        if cellphone_operator == False :
             self.debug_print("NOT CELLPHONE OPERATOR")
             return 0
+        else:
+            self.debug_print("CELLPHONE OPERATOR ON")
 
         values = self._get_buffer_rx(cmd=CMD_GET_SIGNAL_LEVEN,timeout=1)
         signal = 0
@@ -287,7 +296,68 @@ class SimInterface:
             
         return signal
 
+    def _set_function(self,num_function):
+        funct = "="+str(num_function)
+        self._send_cmd(( CMD_SET_FUNC.format(funct))  ,"OK")
 
+
+    def _open_mqtt(self):
+        #first, restore system
+        self._send_cmd(CMD_DEFAULT_CONFIG,"OK")
+        time.sleep(1)
+        self._send_cmd(CMD_OPEN_CONN.format(APN_PERSONAL))
+        self._send_cmd(CMD_GET_CONN,"OK")
+
+    def _close_mqtt(self):
+        self._send_cmd(CMD_DISCONECT_MQTT)
+        self._send_cmd(CMD_CLOSE_MQTT_CONN)
+
+
+    def _mqtt_config(self,url,user,password):
+        #first, restore system
+        self._send_cmd(CMD_DEFAULT_CONFIG,"OK")
+        time.sleep(1)
+      #  self._send_cmd(CMD_OPERATOR.format("=0"))
+      #  self._send_cmd(CMD_GET_OPERATOR)
+
+        #SET APN
+        self._open_mqtt()
+        # CONFIG PARAM
+        #URL
+        URL   = CMD_MQTT_SET_URL.format(url)
+        self._send_cmd(URL,"OK")
+        USER  = CMD_MQTT_SET_USERNAME.format(user)
+        self._send_cmd(USER,"OK")
+
+        PASSWORD = CMD_MQTT_SET_PASSWORD.format(password) 
+        self._send_cmd(PASSWORD,"OK")
+    
+        self._send_cmd(CMD_MQTT_CHECKS_PARAMS,"OK")
+
+
+    def mqtt_publish(self,topic,msg):
+        """"
+        Publish a message to topic
+        """
+        PUB = CMD_MQTT_PUBLISH.format(topic,str(len(msg)))
+        
+        #send command
+        self._send_cmd(PUB,"OK")
+        time.sleep(1)
+        self._send_cmd(msg,"+SMSUB")
+
+
+
+    def mqtt_subscribe(self,topic):
+        SUBSCRIBE = CMD_MQTT_SUBSCRIBE.format(topic)
+        self._send_cmd(SUBSCRIBE,"OK")
+
+    def mqtt_unsubscribe(self,topic):
+        UNSUBSCRIBE = CMD_MQTT_UNSUBSCRIBE.format(topic)
+        self._send_cmd(UNSUBSCRIBE,"OK")
+        pass
+
+        #send messahge
     def internet_secuence(self):
         cmd_list = [
             "AT+CNMP=38",
@@ -329,7 +399,27 @@ if __name__ == "__main__":
         time.sleep(TRY_DELAY)
     app.set_debug_print(True)    
     print("try to send a text message to a cellphone")
-    app.send_message(3856870066,"sistemas")
-    app.send_message(3856870066,"informes")
-    app.send_message(3856870066,"componentes")
+
+
+
+    TOPIC = "X1111"
+    URL="simointi.cloud.shiftr.io"
+    PORT = 1883
+    ID = "simointi"
+    PASS ="fdZY5b69OhOVsAns"
+
+
+    app._mqtt_config(URL,ID,PASS) 
+    app.mqtt_subscribe(TOPIC)
+
+    counter = 1123
+    while True:
+
+        time.sleep(8)
+        app.mqtt_publish(TOPIC,"contador: {}".format(str(counter)))
+        counter += 1
+    #CONFIGURO MQTT SERVICES
+    #app.send_message(3856870066,"sistemas")
+    #app.send_message(3856870066,"informes")
+    #app.send_message(3856870066,"componentes")
 

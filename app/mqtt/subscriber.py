@@ -23,7 +23,7 @@ def on_connect(client,userdata,flags,rc):
         print("[{}] subcribe to the topic {}".format(_API_NAME_,TOPIC))
         client.subscribe("X1111")
     else:
-        print("[{}]Error to connect".format(_API_NAME_))
+        print("[{}]Connection Error".format(_API_NAME_))
 
 def on_disconnected(client,userdata,rc):
 
@@ -35,9 +35,9 @@ def on_message(client,userdata,msg):
 
 
 
-print("init sub")
+print("init subscriber")
 
-client = mqtt.Client(client_id= "simo", clean_session=False)
+client = mqtt.Client(client_id= "simo-sub", clean_session=False)
 
 
 print("conencted: {} port: {}".format(BROKER2,PORT))
